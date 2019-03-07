@@ -14,6 +14,7 @@ const httpOptions = {
   providedIn: 'root'
 })
 export class HeroService {
+  private heroesUrl = 'api/heroes';  // URL to web api
 
   constructor(
     private http: HttpClient,
@@ -32,13 +33,37 @@ export class HeroService {
   getHeroes(): Observable<Hero[]> {
     return this.http.get<Hero[]>(this.heroesUrl)
       .pipe(
+        tap(_ => this.log('fetched heroes')),
         catchError(this.handleError('getHeroes', []))
       );
   }
 
+  // getHero(id: number): Observable<Hero> {
+  //   this.messageService.add(`HeroService: fetched hero id=${id}`);
+  //   return of(HEROES.find(hero => hero.id === id));
+  // }
+
+  /** GET hero by id. Will 404 if id not found */
   getHero(id: number): Observable<Hero> {
-    this.messageService.add(`HeroService: fetched hero id=${id}`);
-    return of(HEROES.find(hero => hero.id === id));
+    const url = `${this.heroesUrl}/${id}`;
+    return this.http.get<Hero>(url).pipe(
+      tap(_ => this.log(`fetched hero id=${id}`)),
+      catchError(this.handleError<Hero>(`getHero id=${id}`))
+    );
+  }
+
+  /** GET hero by id. Return `undefined` when id not found */
+  getHeroNo404<Data>(id: number): Observable<Hero> {
+    const url = `${this.heroesUrl}/?id=${id}`;
+    return this.http.get<Hero[]>(url)
+      .pipe(
+        map(heroes => heroes[0]), // returns a {0|1} element array
+        tap(h => {
+          const outcome = h ? `fetched` : `did not find`;
+          this.log(`${outcome} hero id=${id}`);
+        }),
+        catchError(this.handleError<Hero>(`getHero id=${id}`))
+      );
   }
 
   // PUT: update the hero on the server
@@ -67,13 +92,18 @@ export class HeroService {
     );
   }
 
-  private log(message: string) {
-    this.messageService.add(`HeroService: ${message}`);
+  // SEARCH
+  // Get heroes whoes name contains search term
+  searchHeroes(term: string): Observable<Hero[]> {
+    if(!term.trim()){
+      // if not search term, return empty hero array
+      return of([]);
+    }
+    return this.http.get<Hero[]>(`${this.heroesUrl}/?name=${term}`).pipe(
+      tap(_ => this.log(`found heroes matching "${term}"`)),
+      catchError(this.handleError<Hero[]>('searchHeroes', []))
+    );
   }
-
-  private heroesUrl = 'api/heroes';  // URL to web api
-
-
 
   // Hanle http operation that failed.
   // Let the app continue.
@@ -88,6 +118,10 @@ export class HeroService {
       // Let the app keep running by returning an empt result.
       return of(result as T);
     }
+  }
+
+  private log(message: string) {
+    this.messageService.add(`HeroService: ${message}`);
   }
 
 }
